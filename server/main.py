@@ -129,7 +129,14 @@ def recognize():
     # Decode base64 and save to temporary file
     temp_file = None
     try:
+        print(f"Received base64 data length: {len(base64_data)}")
+        
         audio_data = base64.b64decode(base64_data)
+        print(f"Decoded audio data size: {len(audio_data)} bytes")
+        
+        if len(audio_data) == 0:
+            is_busy = False
+            return jsonify({'error': 'Decoded audio data is empty'}), 400
         
         # Create temporary file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
@@ -137,12 +144,14 @@ def recognize():
         temp_file.close()
         
         file_path = temp_file.name
+        print(f"Created temporary file: {file_path}")
         print(f"Sending path to whisper service: {file_path}")
         
         whisper_process.stdin.write(file_path + '\n')
         whisper_process.stdin.flush()
     except Exception as e:
         is_busy = False
+        print(f"Exception during audio processing: {e}")
         if temp_file and os.path.exists(temp_file.name):
             os.unlink(temp_file.name)
         return jsonify({'error': f'Failed to process audio data: {e}'}), 500
