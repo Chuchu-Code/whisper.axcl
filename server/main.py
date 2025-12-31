@@ -5,6 +5,8 @@ import threading
 from flask import Flask, request, jsonify
 import time
 import json
+import base64
+import tempfile
 
 app = Flask(__name__)
 port = int(os.environ.get('WHISPER_PORT', 8801))
@@ -99,10 +101,10 @@ def recognize():
     global is_busy, stdout_buffer
 
     data = request.get_json()
-    file_path = data.get('filePath')
+    base64_data = data.get('audio')
 
-    if not file_path:
-        return jsonify({'error': 'Missing "filePath" in request body.'}), 400
+    if not base64_data:
+        return jsonify({'error': 'Missing "audio" in request body.'}), 400
 
     if not whisper_process or whisper_process.poll() is not None:
         return jsonify({'error': 'Whisper service is not running.'}), 503
@@ -114,15 +116,26 @@ def recognize():
     with stdout_lock:
         stdout_buffer = ''  # Clear buffer
 
-    print(f"Sending path to whisper service: {file_path}")
-
+    # Decode base64 and save to temporary file
+    temp_file = None
     try:
+        audio_data = base64.b64decode(base64_data)
+        
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+        temp_file.write(audio_data)
+        temp_file.close()
+        
+        file_path = temp_file.name
+        print(f"Sending path to whisper service: {file_path}")
+        
         whisper_process.stdin.write(file_path + '\n')
         whisper_process.stdin.flush()
     except Exception as e:
         is_busy = False
-        return jsonify({'error': f'Failed to write to whisper process: {e}'}), 500
-
+        if temp_file and os.path.exists(temp_file.name):
+            os.unlink(temp_file.name)
+        return jsonify({'error': f'Failed to process audio data: {e}'}), 500
 
     # Wait for the result with a timeout
     start_time = time.time()
@@ -134,11 +147,13 @@ def recognize():
                     result = result_line.split('Result:', 1)[1].strip()
                     
                     response = {
-                        'filePath': file_path,
                         'recognition': result,
                     }
                     
                     is_busy = False
+                    # Clean up temporary file
+                    if temp_file and os.path.exists(temp_file.name):
+                        os.unlink(temp_file.name)
                     return jsonify(response)
                 except IndexError:
                     # Result line is not complete yet, continue waiting
@@ -146,6 +161,9 @@ def recognize():
         time.sleep(0.1) # sleep for 100ms
     
     is_busy = False
+    # Clean up temporary file on timeout
+    if temp_file and os.path.exists(temp_file.name):
+        os.unlink(temp_file.name)
     return jsonify({'error': 'Request timed out.'}), 504
 
 def monitor_whisper_process():
