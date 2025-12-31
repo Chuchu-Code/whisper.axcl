@@ -11,6 +11,11 @@ import tempfile
 app = Flask(__name__)
 port = int(os.environ.get('WHISPER_PORT', 8801))
 
+# Create a directory for temporary audio files
+temp_audio_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'temp_audio'))
+os.makedirs(temp_audio_dir, exist_ok=True)
+print(f"Temporary audio directory: {temp_audio_dir}")
+
 # --- Configuration ---
 # Path to the C++ whisper executable, relative to the root of the project.
 whisper_executable_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'build', 'whisper'))
@@ -138,13 +143,24 @@ def recognize():
             is_busy = False
             return jsonify({'error': 'Decoded audio data is empty'}), 400
         
-        # Create temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
+        # Create temporary file in temp_audio directory
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav', dir=temp_audio_dir)
         temp_file.write(audio_data)
         temp_file.close()
         
         file_path = temp_file.name
         print(f"Created temporary file: {file_path}")
+        
+        # Check file exists and is readable
+        if os.path.exists(file_path):
+            file_size = os.path.getsize(file_path)
+            print(f"File exists, size: {file_size} bytes")
+            import stat
+            file_stat = os.stat(file_path)
+            print(f"File permissions: {oct(file_stat.st_mode)}")
+        else:
+            print(f"ERROR: File does not exist after creation!")
+        
         print(f"Sending path to whisper service: {file_path}")
         
         whisper_process.stdin.write(file_path + '\n')
@@ -172,7 +188,11 @@ def recognize():
                     is_busy = False
                     # Clean up temporary file
                     if temp_file and os.path.exists(temp_file.name):
-                        os.unlink(temp_file.name)
+                        try:
+                            os.unlink(temp_file.name)
+                            print(f"Deleted temporary file: {temp_file.name}")
+                        except Exception as cleanup_error:
+                            print(f"Failed to delete temp file: {cleanup_error}")
                     return jsonify(response)
                 except IndexError:
                     # Result line is not complete yet, continue waiting
