@@ -175,8 +175,8 @@ def recognize():
     except Exception as e:
         is_busy = False
         print(f"Exception during audio processing: {e}")
-        if temp_file and os.path.exists(temp_file.name):
-            os.unlink(temp_file.name)
+        if temp_file:
+            print(f"Temporary file saved for debugging: {temp_file.name}")
         return jsonify({'error': f'Failed to process audio data: {e}'}), 500
 
     # Wait for the result with a timeout
@@ -193,13 +193,9 @@ def recognize():
                     }
                     
                     is_busy = False
-                    # Clean up temporary file
-                    if temp_file and os.path.exists(temp_file.name):
-                        try:
-                            os.unlink(temp_file.name)
-                            print(f"Deleted temporary file: {temp_file.name}")
-                        except Exception as cleanup_error:
-                            print(f"Failed to delete temp file: {cleanup_error}")
+                    # Keep temporary file for debugging
+                    if temp_file:
+                        print(f"Temporary file saved for debugging: {temp_file.name}")
                     return jsonify(response)
                 except IndexError:
                     # Result line is not complete yet, continue waiting
@@ -207,9 +203,9 @@ def recognize():
         time.sleep(0.1) # sleep for 100ms
     
     is_busy = False
-    # Clean up temporary file on timeout
-    if temp_file and os.path.exists(temp_file.name):
-        os.unlink(temp_file.name)
+    # Keep temporary file for debugging
+    if temp_file:
+        print(f"Temporary file saved for debugging: {temp_file.name}")
     return jsonify({'error': 'Request timed out.'}), 504
 
 def monitor_whisper_process():
