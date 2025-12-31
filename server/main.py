@@ -100,10 +100,20 @@ def handle_stderr(process):
 def recognize():
     global is_busy, stdout_buffer
 
-    data = request.get_json()
+    try:
+        data = request.get_json()
+    except Exception as e:
+        print(f"Error parsing JSON: {e}")
+        return jsonify({'error': f'Invalid JSON: {e}'}), 400
+    
+    if not data:
+        print("Request body is empty or not JSON")
+        return jsonify({'error': 'Request body must be JSON'}), 400
+    
     base64_data = data.get('audio')
 
     if not base64_data:
+        print(f"Missing 'audio' field. Request data: {list(data.keys())}")
         return jsonify({'error': 'Missing "audio" in request body.'}), 400
 
     if not whisper_process or whisper_process.poll() is not None:
