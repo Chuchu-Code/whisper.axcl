@@ -158,6 +158,13 @@ def recognize():
             import stat
             file_stat = os.stat(file_path)
             print(f"File permissions: {oct(file_stat.st_mode)}")
+            
+            # Verify file starts with RIFF header (WAV format)
+            with open(file_path, 'rb') as f:
+                header = f.read(4)
+                print(f"File header (first 4 bytes): {header}")
+                if header != b'RIFF':
+                    print("WARNING: File does not appear to be valid WAV format!")
         else:
             print(f"ERROR: File does not exist after creation!")
         
